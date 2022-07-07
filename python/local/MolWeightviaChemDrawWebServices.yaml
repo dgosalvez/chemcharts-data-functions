@@ -32,6 +32,8 @@ inputFields:
 tags:
 - color: '#50AF28'
   text: chemistry
+- color: '#666666'
+  text: chemdraw REST
 - color: '#c6fc00'
   text: calcprop
 updateBehavior: automatic

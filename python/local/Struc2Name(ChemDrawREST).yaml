@@ -68,8 +68,6 @@ script: |
                                , headers=headers)
       name = response.text
       return name
-
-
 outputFields:
 - id: structureColumn
   source: inputField
@@ -83,4 +81,4 @@ allowedClients:
 - Analyst
 - WebPlayer
 demoUrl: 
-limitBy: none
+limitBy: both

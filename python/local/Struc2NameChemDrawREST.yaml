@@ -1,6 +1,6 @@
-id: 0f6d6468-2021-3c33-babe-f932a75b9ff9
-name: MolWeight via ChemDraw Web Services
-description: Calculates MW for structures using Python code in data function to call a ChemDraw REST Web Service
+id: 4c2e4f5c-25a6-88b5-ec17-99d64c10a836
+name: Struc2Name (ChemDraw REST)
+description: Calculates IUPAC name using python to call to ChemDraw REST API
 category: Chemistry
 version: 1.0.0
 serviceName: Script
@@ -32,29 +32,44 @@ inputFields:
 tags:
 - color: '#50AF28'
   text: chemistry
-- color: '#666666'
-  text: chemdraw REST
-- color: '#c6fc00'
-  text: calcprop
+- color: '#36a832'
+  text: ChemDraw REST
 updateBehavior: automatic
 maximumOutputColumns: !!int 1
 maximumOutputTables: !!int 0
 chemistryFunction: !!bool false
 script: |
-  from rdkit.Chem.Descriptors import ExactMolWt
+  import json
+  import requests
   from df.chem_helper import column_to_molecules
   from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
       string_input_field
+  from rdkit import Chem
+
+  RESTPayload = {'chemDataType': 'chemical/x-molfile'}
+  headers = {'Content-type': 'application/json'}
 
 
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
       column_id = string_input_field(request, 'structureColumn')
-      input_column = request.inputColumns[column_id]
-      mols = column_to_molecules(input_column)
-      weights = [None if m is None else ExactMolWt(m) for m in mols]
+      molecules = column_to_molecules(request.inputColumns[column_id])
+      weights = [None if m is None else get_name(m) for m in molecules]
       output_column = ColumnData(name=f'{input_column.name} Exact Mass', dataType=DataType.DOUBLE, values=weights)
       response = DataFunctionResponse(outputColumns=[output_column])
+
       return response
+
+
+  def get_name(m) -> float:
+      RESTPayload['chemData'] = Chem.MolToMolBlock(m)
+      # print(json.dumps(RESTPayload))
+      response = requests.post("https://chemdrawdirect.perkinelmer.cloud/rest/toName"
+                               , data=json.dumps(RESTPayload)
+                               , headers=headers)
+      name = response.text
+      return name
+
+
 outputFields:
 - id: structureColumn
   source: inputField
@@ -63,7 +78,7 @@ outputFields:
 - id: column1
   source: column
   type: filter
-  name: Output exact mass column
+  name: Output molecule name column
 allowedClients:
 - Analyst
 - WebPlayer

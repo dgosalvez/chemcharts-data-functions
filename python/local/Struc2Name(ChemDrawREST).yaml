@@ -1,4 +1,4 @@
-id: 4c2e4f5c-25a6-88b5-ec17-99d64c10a836
+id: eb0f0dbe-4669-c88f-462a-183fca922124
 name: Struc2Name (ChemDraw REST)
 description: Calculates IUPAC name using python to call to ChemDraw REST API
 category: Chemistry
@@ -52,9 +52,10 @@ script: |
 
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
       column_id = string_input_field(request, 'structureColumn')
-      molecules = column_to_molecules(request.inputColumns[column_id])
-      weights = [None if m is None else get_name(m) for m in molecules]
-      output_column = ColumnData(name=f'{input_column.name} Exact Mass', dataType=DataType.DOUBLE, values=weights)
+      input_column = request.inputColumns[column_id]
+      molecules = column_to_molecules(input_column)
+      names = [None if m is None else get_name(m) for m in molecules]
+      output_column = ColumnData(name=f'{input_column.name} UIPAC Name', dataType=DataType.STRING, values=names)
       response = DataFunctionResponse(outputColumns=[output_column])
 
       return response

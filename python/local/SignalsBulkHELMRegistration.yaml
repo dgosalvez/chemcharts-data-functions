@@ -43,7 +43,7 @@ script: |
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
       column_id = string_input_field(request, 'inputField0')
       column_helm = request.inputColumns[column_id]
-      reg_ids = [None if helm is None else register(helm) for helm in column_helm]
+      reg_ids = [None if helm is None else register(helm) for helm in column_helm.values]
       output_column = ColumnData(name=f'{column_helm.name} RegID', dataType=DataType.STRING, values=reg_ids)
       response = DataFunctionResponse(outputColumns=[output_column])
   
@@ -72,7 +72,7 @@ script: |
       return reg_id
   
   
-  def get_cdxml_from_helm(self, helm) -> str:
+  def get_cdxml_from_helm(helm) -> str:
       helm_payload = {'chemDataType': 'chemical/x-helm'}
       json_header = {'Content-type': 'application/json'}
   
@@ -83,8 +83,8 @@ script: |
       return response.text
   
   
-  def get_compounds_library_definition(self) -> JsonType:
-      response = requests.get(self.snbMaterialsAPIUrl + "/libraries", headers=self.headers)
+  def get_compounds_library_definition() -> JsonType:
+      response = requests.get(snbMaterialsAPIUrl + "/libraries", headers=headers)
       libraries = response.json()
       compounds_library_def = next((x for x in libraries["data"] if x["attributes"]["name"] == "Compounds"), None)
       return compounds_library_def
@@ -163,7 +163,7 @@ script: |
       return dup_id
   
   
-  def add_compound_batch(self, payload, reg_id):
+  def add_compound_batch(payload, reg_id):
       # prep batch payload from full payload
       batch_payload = {"data": {}}
       batch_payload["data"]["type"] = "batch"

@@ -28,35 +28,35 @@ script: |
   import requests
   import json
   import urllib.parse
-  
+
   import requests
   from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
       string_input_field
   from ruse.util.data_table import JsonType
-  
+
   snbApiUrl = "https://demo.signalsnotebook.perkinelmer.cloud/api/rest/v1.0"
   snbMaterialsAPIUrl = snbApiUrl + "/materials"
   headers = {'accept': 'application/vnd.api+json', 'Content-type': 'application/vnd.api+json',
              'x-api-key': 'ZKrVtGsoA9sPXFCNHrAl/Rp38zSoxb9C1zGYYgqEmzi7xgepUPBAlpXsHX88FiPMz1Yqeg=='}
-  
-  
+
+
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
       column_id = string_input_field(request, 'inputField0')
       column_helm = request.inputColumns[column_id]
       reg_ids = [None if helm is None else register(helm) for helm in column_helm.values]
       output_column = ColumnData(name=f'{column_helm.name} RegID', dataType=DataType.STRING, values=reg_ids)
       response = DataFunctionResponse(outputColumns=[output_column])
-  
+
       return response
-  
-  
+
+
   def register(helm) -> str:
       compounds_library_def = get_compounds_library_definition()
-  
+
       reg_id_col_name = "Registry Id"
       batch_id_col_name = "Batch Id"
       reg_action_col_name = "Reg Action"
-  
+
       registry_payload = create_compound_registry_payload(compounds_library_def, helm)
       # DupCheck
       reg_id = dupcheck_compound(registry_payload)
@@ -66,30 +66,30 @@ script: |
       else:
           # Add batch
           reg_id, batch_id, reg_action = add_compound_batch(registry_payload, reg_id)
-  
+
           print(f"registered : {helm} with RegId: {reg_id} and BatchId: {batch_id} with Reg Action: {reg_action}")
-  
+
       return reg_id
-  
-  
+
+
   def get_cdxml_from_helm(helm) -> str:
       helm_payload = {'chemDataType': 'chemical/x-helm'}
       json_header = {'Content-type': 'application/json'}
-  
+
       helm_payload['chemData'] = helm
       print("Converted HELM to cdxml: " + json.dumps(helm_payload))
       response = requests.post("https://chemdrawdirect.perkinelmer.cloud/rest/tocdxml",
                                data=json.dumps(helm_payload), headers=json_header)
       return response.text
-  
-  
+
+
   def get_compounds_library_definition() -> JsonType:
       response = requests.get(snbMaterialsAPIUrl + "/libraries", headers=headers)
       libraries = response.json()
       compounds_library_def = next((x for x in libraries["data"] if x["attributes"]["name"] == "Compounds"), None)
       return compounds_library_def
-  
-  
+
+
   def create_compound_registry_payload(library_def: JsonType, helm) -> JsonType:
       payload = {"data": {}}
       # Asset info
@@ -106,10 +106,10 @@ script: |
       payload["data"]["relationships"]["batch"]["data"]["attributes"]["fragments"] = {}
       payload["data"]["relationships"]["batch"]["data"]["attributes"]["fragments"]["salts"] = []
       payload["data"]["relationships"]["batch"]["data"]["attributes"]["fragments"]["solvates"] = []
-  
+
       tmp_field = {}
       cdxml = get_cdxml_from_helm(helm)
-  
+
       # Loop and populate asset fields
       for fld in library_def["attributes"]["assets"]["fields"]:
           if fld["name"] == "Chemical Name":
@@ -121,11 +121,11 @@ script: |
           if fld["name"] == "HELM":
               tmp_field["id"] = fld["id"]
               tmp_field["value"] = helm
-  
+
           if bool(tmp_field):
               payload["data"]["attributes"]["fields"].append(tmp_field)
               tmp_field = {}
-  
+
       # Loop and populate batch fields
       for fld in library_def["attributes"]["batches"]["fields"]:
           if fld["name"] == "Amount":
@@ -134,16 +134,16 @@ script: |
           if fld["name"] == "Purity (%)":
               tmp_field["id"] = fld["id"]
               tmp_field["value"] = {"rawValue": "66", "displayValue": "66 %"}
-  
+
           if bool(tmp_field):
               payload["data"]["relationships"]["batch"]["data"]["attributes"]["fields"].append(tmp_field)
               tmp_field = {}
-  
+
       return payload
-  
-  
+
+
   def register_compound(payload):
-  
+
       response = requests.post(snbMaterialsAPIUrl + "/Compounds/assets", data=json.dumps(payload),
                                headers=headers)
       new_record = response.json()
@@ -151,8 +151,8 @@ script: |
       new_batch = next(
           (x for x in new_record["included"] if "type" in x["attributes"] if x["attributes"]["type"] == "batch"), None)
       return reg_id, new_batch["attributes"]["name"], "New record"
-  
-  
+
+
   def dupcheck_compound(payload) -> str:
       response = requests.post(snbMaterialsAPIUrl + "/Compounds/assets/uniquenessCheck", data=json.dumps(payload),
                                headers=headers)
@@ -161,8 +161,8 @@ script: |
       if len(duplicates) > 0:
           dup_id = duplicates["data"][0]["attributes"]["name"]
       return dup_id
-  
-  
+
+
   def add_compound_batch(payload, reg_id):
       # prep batch payload from full payload
       batch_payload = {"data": {}}
@@ -170,7 +170,7 @@ script: |
       batch_payload["data"]["attributes"] = {}
       batch_payload["data"]["attributes"]["fields"] = payload["data"]["relationships"]["batch"]["data"]["attributes"][
           "fields"]
-  
+
       response = requests.post(
           snbMaterialsAPIUrl + "/Compounds/assets/" + urllib.parse.quote_plus(reg_id) + "/batches",
           data=json.dumps(batch_payload),
@@ -179,7 +179,7 @@ script: |
       batch_id = new_batch["data"]["attributes"]["name"]
       return reg_id, batch_id, "Added batch"
 outputFields:
-- id: inputField2824
+- id: column1
   name: RegID
   source: column
   type: default

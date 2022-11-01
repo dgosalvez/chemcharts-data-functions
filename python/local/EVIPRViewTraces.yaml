@@ -28,7 +28,7 @@ tags:
   text: Vertex
 updateBehavior: manual
 maximumOutputColumns: !!int 10
-maximumOutputTables: !!int 5
+maximumOutputTables: !!int 10
 chemistryFunction: !!bool false
 script: |
   # The contents of the data function definition script appear below
@@ -58,28 +58,23 @@ script: |
       vals = get_vals(colscans, 0)  # the first well
 
       traces = []
-      well_labels = []
-      wells = []
-      for well in range(0,384):
-          wells.append([well] * 1800)
+      swells = []
 
+      for well in range(0,384):
           trace = get_vals(colscans, well, TraceType.NORM_RATIO)
           traces.append(list(trace))
-
           row, col = get_row_col(well)
           well_label = chr(65+row) + str(col+1)
-          well_labels.append([well_label] * 1800)
+          swells.append([well_label] * 1800)
 
       # Chain the traces into a tall-skinny table
-      skinny_wells = itertools.chain.from_iterable(wells)
       skinny_traces = itertools.chain.from_iterable(traces)
-      skinny_well_labels = itertools.chain.from_iterable(well_labels)
+      skinny_wells = itertools.chain.from_iterable(swells)
 
       # prepare results as Spotfire Table
-      output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=list(wells))
+      output_column1 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=list(skinny_wells))
       output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=list(skinny_traces))
-      output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=list(well_labels))
-      output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2, output_column3])
+      output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2])
       print(f"Generated EVIPR Traces Spotfire Datatable for {file_name}")
       response = DataFunctionResponse(outputTables=[output_table])
 
@@ -195,6 +190,11 @@ script: |
           vals = get_vals(colscans, nnn)
           AllTraces[nnn, :] = vals - 1.0
       return AllTraces
+outputFields:
+- id: table1
+  name: Table for trace
+  source: table
+  type: default
 allowedClients:
 - Analyst
 - WebPlayer

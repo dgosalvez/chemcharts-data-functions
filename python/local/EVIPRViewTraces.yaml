@@ -28,7 +28,7 @@ tags:
   text: Vertex
 updateBehavior: manual
 maximumOutputColumns: !!int 10
-maximumOutputTables: !!int 10
+maximumOutputTables: !!int 5
 chemistryFunction: !!bool false
 script: |
   # The contents of the data function definition script appear below
@@ -195,11 +195,6 @@ script: |
           vals = get_vals(colscans, nnn)
           AllTraces[nnn, :] = vals - 1.0
       return AllTraces
-outputFields:
-- id: table1
-  name: Table for trace
-  source: table
-  type: default
 allowedClients:
 - Analyst
 - WebPlayer

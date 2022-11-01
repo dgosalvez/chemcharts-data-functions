@@ -1,0 +1,203 @@
+id: 45c4c595-281d-a218-e5f3-78a35e87c80d
+name: EVIPR View Traces
+description: Unpacks raw .evpr files and displays traces
+category: Vertex
+version: 0.0.1
+serviceName: Script
+serviceUri: glysade.python
+executorId: Glysade.CPythonDataFxn
+inputFields:
+- control:
+    id: inputField0
+    label: Select column with files to process
+    type: columnselect
+    multi: !!bool false
+    tooltip: Column should hold a list of .evpr files
+    validationRules:
+    - type: required
+      message: ''
+    filters:
+    - dataType: string
+      contentType: []
+  request:
+    id: inputField0
+    dataType: string
+    selectorType: column
+tags:
+- color: '#dddddd'
+  text: Vertex
+updateBehavior: manual
+maximumOutputColumns: !!int 10
+maximumOutputTables: !!int 10
+chemistryFunction: !!bool false
+script: |
+  
+  # The contents of the data function definition script appear below
+  # the code should define an execute method
+
+  # Once this is working copy the code below to the script tag in the data function definition
+
+  import io
+  import struct
+  import urllib
+  import urllib.request
+  import urllib.request
+  from enum import Enum
+  import numpy as np
+  import itertools
+  from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
+      string_input_field, TableData
+
+  def execute(request: DataFunctionRequest) -> DataFunctionResponse:
+      #column_id = string_input_field(request, 'structureColumn')
+      #input_column = request.inputColumns[column_id]
+
+      # read the file into colscans
+      out_file_name= "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+      file_name= "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+      colscans = read_evipr(file_name, False)
+      vals = get_vals(colscans, 0)  # the first well
+
+      traces = []
+      swells = []
+
+      for well in range(0,384):
+          trace = get_vals(colscans, well, TraceType.NORM_RATIO)
+          traces.append(list(trace))
+          row, col = get_row_col(well)
+          well_label = chr(65+row) + str(col+1)
+          swells.append([well_label] * 1800)
+
+      # Chain the traces into a tall-skinny table
+      skinny_traces = itertools.chain.from_iterable(traces)
+      skinny_wells = itertools.chain.from_iterable(swells)
+
+      # prepare results as Spotfire Table
+      output_column1 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=list(skinny_wells))
+      output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=list(skinny_traces))
+      output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2])
+      print(f"Generated EVIPR Traces Spotfire Datatable for {file_name}")
+      response = DataFunctionResponse(outputTables=[output_table])
+
+      return response
+
+  class TraceType(Enum):
+      SHORT = 1
+      LONG = 2
+      RATIO = 3
+      NORM_RATIO = 4
+      STUPID_NORM_RATIO = 5
+
+  def get_row_col(well_num):
+      col = well_num % 24
+      row = well_num // 24
+      return row, col
+
+  def get_vals(colscans, well_num, trace_type=TraceType.NORM_RATIO, norm_fraction=0.05):
+      row, col = get_row_col(well_num)
+      scan_num = col % 6     # which data block to read from
+      block_num = col // 6
+
+      # print row, col, scan_num, block_num
+      well_offset = row * 2 + (block_num*32)
+      stride = 16 * 2 * 4  # 16 columns * 2 channels * 4 electrodes
+
+      if trace_type == TraceType.SHORT:
+          vals = (colscans[scan_num][well_offset::stride]*1.0)
+      elif trace_type == TraceType.LONG:
+          vals = colscans[scan_num][well_offset+1::stride]
+      elif trace_type == TraceType.RATIO:
+          vals = (colscans[scan_num][well_offset::stride]*1.0) / colscans[scan_num][well_offset+1::stride]
+      elif trace_type == TraceType.NORM_RATIO:
+          vals = (colscans[scan_num][well_offset::stride]*1.0) / colscans[scan_num][well_offset+1::stride]
+          vals = vals / np.mean(vals[0:int(norm_fraction*len(vals))])
+      elif trace_type == TraceType.STUPID_NORM_RATIO:
+          #NOTE: this replicates a bug in the original version, which just normalizes by the first point instead of the first 5% of the data
+          vals = (colscans[scan_num][well_offset::stride]*1.0) / colscans[scan_num][well_offset+1::stride]
+          vals = vals/vals[0]
+      return vals
+
+  def read_evipr(fname, do_print=True):
+      colscans = []
+      dtype = np.dtype("<H")
+
+      if isinstance(fname, tuple):
+          import boto3
+          from io import BytesIO
+          s3 = boto3.client("s3")
+          fil = BytesIO(s3.get_object(Bucket=fname[0], Key=fname[1])['Body'].read())
+          fil.seek(0)
+      elif fname.startswith("http"):
+          fil = io.BytesIO(urllib.request.urlopen(fname).read())
+      else:
+          fil = open(fname, 'rb')
+
+      # read header size and skip it
+      siz = struct.unpack('i', fil.read(4))[0]
+      if do_print:
+          print("--> Header size:", siz, " Current file pointer: ", fil.tell())
+          print(fil.read(siz))
+          print("--> Current file pointer: ", fil.tell())
+      else:
+          fil.seek(siz, 1)
+
+      for i in range(0, 6):
+          # read protocol header size and skip it
+          siz = struct.unpack('i', fil.read(4))[0]
+          if do_print:
+              print("--> PHeader size:", siz, " Current file pointer: ", fil.tell())
+              print(fil.read(siz))
+              print("--> Current file pointer: ", fil.tell())
+          else:
+              fil.seek(siz, 1)
+
+          # read protocol size
+          siz = struct.unpack('i', fil.read(4))[0]
+          # here siz is the number of unsigned shorts to read, not the number of bytes
+          if do_print:
+              print("--> Protocol size", siz," Current file pointer: ", fil.tell())
+              # read protocol N
+              num_scans = siz/8/16
+              print("--> Protocol %d size %d #timepoints: %f" % (i+1, siz, num_scans))
+
+
+          bytes = fil.read(siz * 2) # read siz two-byte shorts
+          colscan = np.frombuffer(bytes, dtype=dtype)
+          #colscan = np.fromfile(fil, dtype=dtype, count=siz)
+          colscans.append(colscan)
+
+          if do_print:
+              print("--> After reading block, current file pointer: ", fil.tell())
+
+          # read post-protocol
+          post_bytes = fil.read(4)
+          siz = struct.unpack('i', post_bytes)[0]
+          if do_print:
+              print("--> Post Header size:", siz, " Current file pointer: ", fil.tell())
+              print(fil.read(siz))
+              print("---> Current file pointer: ", fil.tell())
+          else:
+              fil.seek(siz, 1)
+      return colscans
+
+  def read_traces(fname, do_print=True):
+      # Load the plate
+      colscans = read_evipr(fname, do_print)
+      vals = get_vals(colscans, 0) # the first well
+
+      AllTraces =  np.zeros((384, len(vals)))
+      # Subtracting 1 is necessary for the Minkowski norm to work
+      for nnn in range(0, 384):
+          vals = get_vals(colscans, nnn)
+          AllTraces[nnn, :] = vals - 1.0
+      return AllTraces
+outputFields:
+- id: table1
+  name: Table for trace
+  source: table
+  type: default
+allowedClients:
+- Analyst
+- WebPlayer
+demoUrl: 
+limitBy: none

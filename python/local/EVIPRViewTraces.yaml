@@ -28,14 +28,9 @@ tags:
   text: Vertex
 updateBehavior: manual
 maximumOutputColumns: !!int 10
-maximumOutputTables: !!int 10
+maximumOutputTables: !!int 5
 chemistryFunction: !!bool false
 script: |
-  # The contents of the data function definition script appear below
-  # the code should define an execute method
-
-  # Once this is working copy the code below to the script tag in the data function definition
-
   import io
   import struct
   import urllib
@@ -47,37 +42,37 @@ script: |
   from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
       string_input_field, TableData
 
-  def execute(request: DataFunctionRequest) -> DataFunctionResponse:
-      #column_id = string_input_field(request, 'structureColumn')
-      #input_column = request.inputColumns[column_id]
 
+  def execute(request: DataFunctionRequest) -> DataFunctionResponse:
+      # column_id = string_input_field(request, 'structureColumn')
+      # input_column = request.inputColumns[column_id]
       # read the file into colscans
-      out_file_name= "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
-      file_name= "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+      out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+      file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
       colscans = read_evipr(file_name, False)
       vals = get_vals(colscans, 0)  # the first well
-
       traces = []
-      swells = []
-
-      for well in range(0,384):
+      well_labels = []
+      wells =[]
+      for well in range(0, 384):
           trace = get_vals(colscans, well, TraceType.NORM_RATIO)
           traces.append(list(trace))
           row, col = get_row_col(well)
-          well_label = chr(65+row) + str(col+1)
-          swells.append([well_label] * 1800)
-
+          well_label = chr(65 + row) + str(col + 1)
+          well_labels.append([well_label] * 1800)
+          wells.append([well] * 1800)
       # Chain the traces into a tall-skinny table
       skinny_traces = itertools.chain.from_iterable(traces)
-      skinny_wells = itertools.chain.from_iterable(swells)
+      skinny_wells = itertools.chain.from_iterable(wells)
+      skinny_labels = itertools.chain.from_iterable(well_labels)
 
       # prepare results as Spotfire Table
-      output_column1 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=list(skinny_wells))
+      output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=list(skinny_wells))
       output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=list(skinny_traces))
-      output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2])
+      output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=list(skinny_labels))
+      output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2, output_column3])
       print(f"Generated EVIPR Traces Spotfire Datatable for {file_name}")
       response = DataFunctionResponse(outputTables=[output_table])
-
       return response
 
   class TraceType(Enum):
@@ -190,11 +185,6 @@ script: |
           vals = get_vals(colscans, nnn)
           AllTraces[nnn, :] = vals - 1.0
       return AllTraces
-outputFields:
-- id: table1
-  name: Table for trace
-  source: table
-  type: default
 allowedClients:
 - Analyst
 - WebPlayer

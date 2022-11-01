@@ -31,7 +31,6 @@ maximumOutputColumns: !!int 10
 maximumOutputTables: !!int 10
 chemistryFunction: !!bool false
 script: |
-  
   # The contents of the data function definition script appear below
   # the code should define an execute method
 

@@ -78,7 +78,7 @@ script: |
       # prepare results as Spotfire Table
       output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=list(wells))
       output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=list(skinny_traces))
-      output_column3 = ColumnData(name=f'Normal Ratio', dataType=DataType.STRING, values=list(well_labels))
+      output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=list(well_labels))
       output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2, output_column3])
       print(f"Generated EVIPR Traces Spotfire Datatable for {file_name}")
       response = DataFunctionResponse(outputTables=[output_table])

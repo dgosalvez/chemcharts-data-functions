@@ -53,23 +53,28 @@ script: |
       vals = get_vals(colscans, 0)  # the first well
       traces = []
       well_labels = []
-      wells =[]
       for well in range(0, 384):
           trace = get_vals(colscans, well, TraceType.NORM_RATIO)
           traces.append(list(trace))
           row, col = get_row_col(well)
           well_label = chr(65 + row) + str(col + 1)
-          well_labels.append([well_label] * 1800)
-          wells.append([well] * 1800)
-      # Chain the traces into a tall-skinny table
-      skinny_traces = itertools.chain.from_iterable(traces)
-      skinny_wells = itertools.chain.from_iterable(wells)
-      skinny_labels = itertools.chain.from_iterable(well_labels)
+          well_labels.append(well_label)
+
+      # Need to create a tall-skinny table to trellis the results in Spotfire.
+      # The rows of the tall-skinny need to be ordered by well number
+      # so they distribute values sequentially across the trellis
+      # This can be accomplished by zipping the 384 traces
+      table = zip(*traces)
+      # Chain the traces into a single list
+      norm_ratio_col = list(itertools.chain.from_iterable(table))
+      # Generate an order list of well numbers and well labels
+      well_nums_col = [list(range(0,384)) * 1800]
+      well_labels_col = [well_labels *1800]
 
       # prepare results as Spotfire Table
-      output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=list(skinny_wells))
-      output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=list(skinny_traces))
-      output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=list(skinny_labels))
+      output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=well_nums_col)
+      output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
+      output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
       output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2, output_column3])
       print(f"Generated EVIPR Traces Spotfire Datatable for {file_name}")
       response = DataFunctionResponse(outputTables=[output_table])

@@ -68,8 +68,8 @@ script: |
       # Chain the traces into a single list
       norm_ratio_col = list(itertools.chain.from_iterable(table))
       # Generate an order list of well numbers and well labels
-      well_nums_col = [list(range(0,384)) * 1800]
-      well_labels_col = [well_labels *1800]
+      well_nums_col = list(range(0,384)) * 1800
+      well_labels_col = well_labels * 1800
 
       # prepare results as Spotfire Table
       output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=well_nums_col)

@@ -8,7 +8,7 @@ serviceUri: glysade.python
 executorId: Glysade.CPythonDataFxn
 inputFields:
 - control:
-    id: inputField0
+    id: vp3Files
     label: Select column with files to process
     type: columnselect
     multi: !!bool false
@@ -20,7 +20,7 @@ inputFields:
     - dataType: string
       contentType: []
   request:
-    id: inputField0
+    id: vp3Files
     dataType: string
     selectorType: column
 tags:
@@ -34,50 +34,54 @@ script: |
   import io
   import struct
   import urllib
-  import urllib.request
-  import urllib.request
+  from urllib.request import Request, urlopen
   from enum import Enum
   import numpy as np
   import itertools
   from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
       string_input_field, TableData
 
+  snb_api_key = "OBtnuLFItrL7g87qcrRquzwlwEaMOUoWloJokHFUz+KYEm1+ryi28ywDssCJByfPGrVf5w=="
 
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
-      # column_id = string_input_field(request, 'structureColumn')
-      # input_column = request.inputColumns[column_id]
-      # read the file into colscans
-      out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
-      file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
-      colscans = read_evipr(file_name, False)
-      vals = get_vals(colscans, 0)  # the first well
-      traces = []
-      well_labels = []
-      for well in range(0, 384):
-          trace = get_vals(colscans, well, TraceType.NORM_RATIO)
-          traces.append(list(trace))
-          row, col = get_row_col(well)
-          well_label = chr(65 + row) + str(col + 1)
-          well_labels.append(well_label)
+      column_id = string_input_field(request, 'vp3Files')
+      evp3_urls = request.inputColumns[column_id]
+      output_tables = []
+      for url in evp3_urls.values:
+          # read the file into colscans
+          #out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+          #file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+          snb_entity_id = url.split("/")[7]
+          colscans = read_evipr(url, False)
+          vals = get_vals(colscans, 0)  # the first well
+          traces = []
+          well_labels = []
+          for well in range(0, 384):
+              trace = get_vals(colscans, well, TraceType.NORM_RATIO)
+              traces.append(list(trace))
+              row, col = get_row_col(well)
+              well_label = chr(65 + row) + str(col + 1)
+              well_labels.append(well_label)
 
-      # Need to create a tall-skinny table to trellis the results in Spotfire.
-      # The rows of the tall-skinny need to be ordered by well number
-      # so they distribute values sequentially across the trellis
-      # This can be accomplished by zipping the 384 traces
-      table = zip(*traces)
-      # Chain the traces into a single list
-      norm_ratio_col = list(itertools.chain.from_iterable(table))
-      # Generate an order list of well numbers and well labels
-      well_nums_col = list(range(0,384)) * 1800
-      well_labels_col = well_labels * 1800
+          # Need to create a tall-skinny table to trellis the results in Spotfire.
+          # The rows of the tall-skinny need to be ordered by well number
+          # so they distribute values sequentially across the trellis
+          # This can be accomplished by zipping the 384 traces
+          table = zip(*traces)
+          # Chain the traces into a single list
+          norm_ratio_col = list(itertools.chain.from_iterable(table))
+          # Generate an order list of well numbers and well labels
+          well_nums_col = list(range(0,384)) * 1800
+          well_labels_col = well_labels * 1800
 
-      # prepare results as Spotfire Table
-      output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=well_nums_col)
-      output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
-      output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
-      output_table = TableData(tableName='EVIPR Normal Ratio', columns=[output_column1, output_column2, output_column3])
-      print(f"Generated EVIPR Traces Spotfire Datatable for {file_name}")
-      response = DataFunctionResponse(outputTables=[output_table])
+          # prepare results as Spotfire Table
+          output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=well_nums_col)
+          output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
+          output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
+          output_table = TableData(tableName=f'EVIPR {snb_entity_id}', columns=[output_column1, output_column2, output_column3])
+          print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
+          output_tables.append(output_table)
+      response = DataFunctionResponse(outputTables=output_tables)
       return response
 
   class TraceType(Enum):
@@ -127,7 +131,9 @@ script: |
           fil = BytesIO(s3.get_object(Bucket=fname[0], Key=fname[1])['Body'].read())
           fil.seek(0)
       elif fname.startswith("http"):
-          fil = io.BytesIO(urllib.request.urlopen(fname).read())
+          req = Request(fname)
+          req.add_header("x-api-key", snb_api_key)
+          fil = io.BytesIO(urlopen(req).read())
       else:
           fil = open(fname, 'rb')
 

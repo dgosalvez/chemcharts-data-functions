@@ -202,53 +202,71 @@ allowedClients:
 demoUrl: 
 limitBy: none
 ironPython: |
-    import sys,clr
-    from Spotfire.Dxp.Data import DataTable, DataManager
-    from Spotfire.Dxp.Application import PanelTypeIdentifiers
-    from Spotfire.Dxp.Application import Panel
-    import Spotfire.Dxp.Application.PanelCollection
-    from Spotfire.Dxp.Application.Visuals import lineChart, TrellisMode, IndividualScalingMode
+  import sys, clr
+  from Spotfire.Dxp.Data import DataTable, DataManager
+  from Spotfire.Dxp.Application import PanelTypeIdentifiers
+  from Spotfire.Dxp.Application import Panel
+  import Spotfire.Dxp.Application.PanelCollection
+  from Spotfire.Dxp.Application.Visuals import LineChart, TrellisMode, IndividualScalingMode, AxisRange
+  from System.Drawing import * #Color
+  from System import * #ColorTranslator
+  
+  from System import AppDomain
+  for asm in AppDomain.CurrentDomain.GetAssemblies():
+    if asm.GetName().Name == 'Charts':
+        clr.AddReference(asm.FullName)
+  
+  from Charts import ChartsModel
+  model_type = ChartsModel
+  
+  #tableId pass in args
+  dataTable = ResultTables[0]
+  #dataTable = Document.Data.Tables.Item['EVIPR uploadedResource:3273c042-fb85-4a67-800c-bbb0f3734d88']
+  
+  if not dataTable:
+    raise Exception('target table not found')
+  
+  page = Document.Pages.AddNew('EVIPR Trace')
+  panelsToHide = [PanelTypeIdentifiers.DataPanel, PanelTypeIdentifiers.DetailsOnDemandPanel]
+  
+  for panel in page.Panels:
+    if panel.TypeId in panelsToHide:
+        if panel.Visible:
+            panel.Visible = False
+  
+  
+  filteringScheme = Document.FilteringSchemes[0]
+  page.FilterPanel.FilteringSchemeReference = filteringScheme
+  
+  #add and configure LineChart
+  lineChart = page.Visuals.AddNew[LineChart]()
+  lineChart.Title = "EVIPR Normal Ratio"
+  lineChart.Data.DataTableReference = dataTable
+  lineChart.XAxis.Expression = '<' + 'baserowid()' +'>'
+  lineChart.XAxis.ManualZoom = True
+  lineChart.XAxis.Scale.ShowGridlines = False
+  lineChart.XAxis.Scale.ShowLabels = False
+  lineChart.XAxis.ShowAxisSelector = False
+  
+  #build YAxis expression
+  lineChart.YAxis.Expression = '[Normal Ratio]'
+  lineChart.Trellis.TrellisMode = TrellisMode.Panels
+  lineChart.Trellis.PanelAxis.Expression = '<[Well Label]>'
+  lineChart.Trellis.ManualLayout = True
+  lineChart.Trellis.ManualColumnCount = 24
+  lineChart.Trellis.ManualRowCount = 16
+  lineChart.YAxis.IndividualScaling = False
+  lineChart.YAxis.IndividualScalingMode = IndividualScalingMode.Trellis
+  lineChart.YAxis.Range = AxisRange(0.85, 1.4)
+  lineChart.YAxis.ShowAxisSelector = False
+  color = ColorTranslator.FromHtml("#0eff00")
+  lineChart.ColorAxis.Coloring.DefaultColor = color
+  
+  for i in lineChart.Legend.Items:
+      if i.Title == "Data table":
+          i.Visible = True
+          i.ShowTitle = True
+      else:
+          i.Visible = False  #Hide any legend items not caught above
 
-    from System import AppDomain
-    for asm in AppDomain.CurrentDomain.GetAssemblies():
-      if asm.GetName().Name == 'Charts':
-          clr.AddReference(asm.FullName)
-
-    from Charts import ChartsModel
-    model_type = ChartsModel
-
-    #tableId pass in args
-    dataTable = ResultTables[0]
-
-    if not dataTable:
-      raise Exception('target table not found')
-
-    page = Document.Pages.AddNew('EVIPR Trace')
-    panelsToHide = [PanelTypeIdentifiers.DataPanel, PanelTypeIdentifiers.DetailsOnDemandPanel]
-
-    for panel in page.Panels:
-      if panel.TypeId in panelsToHide:
-          if panel.Visible:
-              panel.Visible = False
-
-
-    filteringScheme = Document.FilteringSchemes[0]
-    page.FilterPanel.FilteringSchemeReference = filteringScheme
-
-    #add and configure LineChart
-    lineChart = page.Visuals.AddNew[LineChart]()
-    lineChart.Title = "EVIPR"
-    lineChart.Data.DataTableReference = dataTable
-    lineChart.XAxis.Expression = '<' + 'baserowid()' +'>'
-    #build YAxis expression
-    lineChart.YAxis.Expression = '<[Normal Ratio]>'
-    lineChart.Trellis.TrellisMode = TrellisMode.Panels
-    lineChart.Trellis.PanelAxis.Expression = '<[Well Label]>'
-    lineChart.Trellis.ManualLayout = True
-    lineChart.Trellis.ManualColumnCount = 24
-    lineChart.Trellis.ManualRowCount = 16
-    lineChart.YAxis.IndividualScaling = True
-    lineChart.YAxis.IndividualScalingMode = IndividualScalingMode.Trellis
-    lineChart.YAxis.Range = AxisRange(0.85, 1.4)
-    
-    page.AutoConfigure()
+  page.AutoConfigure()

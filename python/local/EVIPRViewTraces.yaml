@@ -78,8 +78,8 @@ script: |
           output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=well_nums_col)
           output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
           output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
-          output_table = TableData(tableName=f'EVIPR {snb_entity_id}', columns=[output_column1, output_column2, output_column3])
-          print(f"{url}")
+          output_table = TableData(tableName=f'{snb_entity_id}', columns=[output_column1, output_column2, output_column3])
+          print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
           output_tables.append(output_table)
       response = DataFunctionResponse(outputTables=output_tables)
       return response

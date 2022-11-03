@@ -78,7 +78,7 @@ script: |
           output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=well_nums_col)
           output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
           output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
-          output_table = TableData(tableName=f'{snb_entity_id}', columns=[output_column1, output_column2, output_column3])
+          output_table = TableData(tableName=f'EVIPR {snb_entity_id}', columns=[output_column1, output_column2, output_column3])
           print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
           output_tables.append(output_table)
       response = DataFunctionResponse(outputTables=output_tables)
@@ -196,17 +196,59 @@ script: |
           vals = get_vals(colscans, nnn)
           AllTraces[nnn, :] = vals - 1.0
       return AllTraces
-outputFields:
-  - id: table1
-    source: table
-    type: default
-    name: EVIPR1
-  - id: table2
-    source: table
-    type: default
-    name: EVPR2
 allowedClients:
 - Analyst
 - WebPlayer
 demoUrl: 
 limitBy: none
+ironPython: |
+    import sys,clr
+    from Spotfire.Dxp.Data import DataTable, DataManager
+    from Spotfire.Dxp.Application import PanelTypeIdentifiers
+    from Spotfire.Dxp.Application import Panel
+    import Spotfire.Dxp.Application.PanelCollection
+    from Spotfire.Dxp.Application.Visuals import lineChart, TrellisMode, IndividualScalingMode
+
+    from System import AppDomain
+    for asm in AppDomain.CurrentDomain.GetAssemblies():
+      if asm.GetName().Name == 'Charts':
+          clr.AddReference(asm.FullName)
+
+    from Charts import ChartsModel
+    model_type = ChartsModel
+
+    #tableId pass in args
+    dataTable = ResultTables[0]
+
+    if not dataTable:
+      raise Exception('target table not found')
+
+    page = Document.Pages.AddNew('EVIPR Trace')
+    panelsToHide = [PanelTypeIdentifiers.DataPanel, PanelTypeIdentifiers.DetailsOnDemandPanel]
+
+    for panel in page.Panels:
+      if panel.TypeId in panelsToHide:
+          if panel.Visible:
+              panel.Visible = False
+
+
+    filteringScheme = Document.FilteringSchemes[0]
+    page.FilterPanel.FilteringSchemeReference = filteringScheme
+
+    #add and configure LineChart
+    lineChart = page.Visuals.AddNew[LineChart]()
+    lineChart.Title = "EVIPR"
+    lineChart.Data.DataTableReference = dataTable
+    lineChart.XAxis.Expression = '<' + 'baserowid()' +'>'
+    #build YAxis expression
+    lineChart.YAxis.Expression = '<[Normal Ratio]>'
+    lineChart.Trellis.TrellisMode = TrellisMode.Panels
+    lineChart.Trellis.PanelAxis.Expression = '<[Well Label]>'
+    lineChart.Trellis.ManualLayout = True
+    lineChart.Trellis.ManualColumnCount = 24
+    lineChart.Trellis.ManualRowCount = 16
+    lineChart.YAxis.IndividualScaling = True
+    lineChart.YAxis.IndividualScalingMode = IndividualScalingMode.Trellis
+    lineChart.YAxis.Range = AxisRange(0.85, 1.4)
+    
+    page.AutoConfigure()

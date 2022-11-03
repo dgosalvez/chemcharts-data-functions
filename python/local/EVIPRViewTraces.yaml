@@ -196,6 +196,15 @@ script: |
           vals = get_vals(colscans, nnn)
           AllTraces[nnn, :] = vals - 1.0
       return AllTraces
+outputFields:
+  - id: table1
+    source: table
+    type: default
+    name: EVIPR1
+  - id: table2
+    source: table
+    type: default
+    name: EVPR2
 allowedClients:
 - Analyst
 - WebPlayer

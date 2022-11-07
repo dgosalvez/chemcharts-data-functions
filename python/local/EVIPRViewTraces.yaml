@@ -52,33 +52,38 @@ script: |
           #out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
           #file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
           snb_entity_id = url.split("/")[7]
-          colscans = read_evipr(url, False)
-          vals = get_vals(colscans, 0)  # the first well
+          colscans = read_evipr(url, True)
+          first_trace = get_vals(colscans, 0)  # the first well
+          trace_size = first_trace.size
           traces = []
           well_labels = []
+          frame_ids = []
           for well in range(0, 384):
               trace = get_vals(colscans, well, TraceType.NORM_RATIO)
               traces.append(list(trace))
+              frame_ids.append(list(range(0,trace_size)))
               row, col = get_row_col(well)
               well_label = chr(65 + row) + str(col + 1)
               well_labels.append(well_label)
+
 
           # Need to create a tall-skinny table to trellis the results in Spotfire.
           # The rows of the tall-skinny need to be ordered by well number
           # so they distribute values sequentially across the trellis
           # This can be accomplished by zipping the 384 traces
-          table = zip(*traces)
+          norm_ratios = zip(*traces)
+          frames = zip(*frame_ids)
           # Chain the traces into a single list
-          norm_ratio_col = list(itertools.chain.from_iterable(table))
+          norm_ratio_col = list(itertools.chain.from_iterable(norm_ratios))
+          frames_col = list(itertools.chain.from_iterable(frames))
           # Generate an order list of well numbers and well labels
-          well_nums_col = list(range(0,384)) * 1800
-          well_labels_col = well_labels * 1800
-
+          well_labels_col = well_labels * trace_size
           # prepare results as Spotfire Table
-          output_column1 = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=well_nums_col)
+          output_column1 = ColumnData(name=f'Frame ID', dataType=DataType.INTEGER, values=frames_col)
           output_column2 = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
           output_column3 = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
-          output_table = TableData(tableName=f'EVIPR {snb_entity_id}', columns=[output_column1, output_column2, output_column3])
+
+          output_table = TableData(tableName=f'{snb_entity_id}', columns=[output_column1, output_column2, output_column3])
           print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
           output_tables.append(output_table)
       response = DataFunctionResponse(outputTables=output_tables)

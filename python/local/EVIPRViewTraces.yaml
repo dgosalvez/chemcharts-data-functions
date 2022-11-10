@@ -38,59 +38,41 @@ script: |
   import struct
   from enum import Enum
   from urllib.request import Request, urlopen
-
+  
   import numpy as np
   from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
-      string_input_field, TableData
-
+      string_input_field, integer_input_field, boolean_input_field, TableData
+  
   snb_api_key = "OBtnuLFItrL7g87qcrRquzwlwEaMOUoWloJokHFUz+KYEm1+ryi28ywDssCJByfPGrVf5w=="
-  scaleReferenceWellType = "Stimulator Control"
-  centralReferenceWellType = "Neutral Control"
-
-
-  class PlateMapWell:
-      def __init__(self, well_number, well_type):
-          self.well_number = well_number
-          self.well_type = well_type
-
-
-  def make_plate_map():
-      plate_map = []
-      for i in range(0, 384):
-          well_type = "Compound"
-          if i % 24 == 0:
-              well_type = centralReferenceWellType
-          #elif i ==4 or (i+28) % 24 == 0:
-          elif (i+1) % 24 == 0:
-              well_type = scaleReferenceWellType
-          plate_map.append((i, well_type))
-      return plate_map
-
-
-  wellTypeIndices = make_plate_map()
-  scaleRefWellTypeIndices = [i for i, wt in wellTypeIndices if wt == scaleReferenceWellType]
-  centralRefWellTypeIndices = [i for i, wt in wellTypeIndices if wt == centralReferenceWellType]
-  peakRegions = ast.literal_eval(
-      "{'R1':(19,79,'AVG'),'R2':(89,109,'MAX'),'R3':(119,129,'MAX'),'R4':(139,149 ,'MAX'),'R5':(159,169,'MAX'),'R6':(179,189,'MAX')}")
-  threshold_val = 50
-  thresholdComputationRegion = 'R2'
-  peakCountNormalizationRegion = 'R1'
-  differenceMethod = True
-  differenceMethodType = "pre"
-  differenceMethodNumPoints = 20
-  differenceMethodCalculation = "avg"
-
-
+  
+  
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
       column_id = string_input_field(request, 'vp3Files')
       evp3_urls = request.inputColumns[column_id]
+  
+      scale_reference_well_type = string_input_field(request, 'scaleReferenceWellType')
+      central_reference_well_type = string_input_field(request, 'centralReferenceWellType')
+      peak_regions = ast.literal_eval(string_input_field(request, 'peakRegions'))
+      threshold_val = integer_input_field(request, 'threshold_val')
+      peak_count_normalization_region = string_input_field(request, 'peakCountNormalizationRegion')
+      threshold_computation_region = string_input_field(request, 'thresholdComputationRegion')
+      difference_method = boolean_input_field(request, 'differenceMethod')
+      difference_method_type = string_input_field(request, 'differenceMethodType')
+      difference_method_calculation = string_input_field(request, 'differenceMethodCalculation')
+      difference_method_num_points = integer_input_field(request, 'differenceMethodNumPoints')
+  
+      well_type_indices = make_plate_map(scale_reference_well_type, central_reference_well_type)
+      scale_ref_well_type_indices = [i for i, wt in well_type_indices if wt == scale_reference_well_type]
+      central_ref_well_type_indices = [i for i, wt in well_type_indices if wt == central_reference_well_type]
+  
+  
       output_tables = []
       for url in evp3_urls.values:
           # read the file into colscans
           # out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
           # file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
           snb_entity_id = url.split("/")[7]
-          colscans = read_evipr(url, True)
+          colscans = read_evipr(url, False)
           first_trace = get_vals(colscans, 0)  # the first well
           trace_size = first_trace.size
           traces = []
@@ -103,7 +85,7 @@ script: |
               row, col = get_row_col(well)
               well_label = chr(65 + row) + str(col + 1)
               well_labels.append(well_label)
-
+  
           # Need to create a tall-skinny table to trellis the results in Spotfire.
           # The rows of the tall-skinny need to be ordered by well number
           # so they distribute values sequentially across the trellis
@@ -119,53 +101,58 @@ script: |
           frame_id_column = ColumnData(name=f'Frame ID', dataType=DataType.INTEGER, values=frames_col)
           ratio_column = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
           well_label_column = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
-
+  
           traces_datatable = TableData(tableName=f'{snb_entity_id}',
                                        columns=[frame_id_column, ratio_column, well_label_column])
           output_tables.append(traces_datatable)
+          print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
           # Peak Counting
           region_aggregate_values = calc_raw_region_aggregate_values(traces, 384,
-                                                                     differenceMethodType,
-                                                                     differenceMethodCalculation,
-                                                                     differenceMethodNumPoints)
-          peak_counts = calc_peak_counts(region_aggregate_values, threshold_val,
-                                         differenceMethod, thresholdComputationRegion)
-
+                                                                     difference_method_type,
+                                                                     difference_method_calculation,
+                                                                     difference_method_num_points,
+                                                                     peak_regions, difference_method)
+          peak_counts = calc_peak_counts(region_aggregate_values, peak_regions,
+                                         difference_method, threshold_computation_region,
+                                         peak_count_normalization_region, scale_ref_well_type_indices,
+                                         central_ref_well_type_indices, threshold_val)
+  
           peak_counts_column = ColumnData(name=f'Raw Counts', dataType=DataType.INTEGER, values=peak_counts)
           well_label_col = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels)
           well_num_col = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=list(range(0,384)))
           peak_counts_datatable = TableData(tableName=f'Counts {snb_entity_id}',
                                             columns=[well_num_col, well_label_col, peak_counts_column])
           output_tables.append(peak_counts_datatable)
-          print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
-
+          print(f"Generated EVIPR Peak Counts Spotfire Datatable for {url}")
+  
       response = DataFunctionResponse(outputTables=output_tables)
+      print("Done")
       return response
-
-
+  
+  
   class TraceType(Enum):
       SHORT = 1
       LONG = 2
       RATIO = 3
       NORM_RATIO = 4
       STUPID_NORM_RATIO = 5
-
-
+  
+  
   def get_row_col(well_num):
       col = well_num % 24
       row = well_num // 24
       return row, col
-
-
+  
+  
   def get_vals(colscans, well_num, trace_type=TraceType.NORM_RATIO, norm_fraction=0.05):
       row, col = get_row_col(well_num)
       scan_num = col % 6  # which data block to read from
       block_num = col // 6
-
+  
       # print row, col, scan_num, block_num
       well_offset = row * 2 + (block_num * 32)
       stride = 16 * 2 * 4  # 16 columns * 2 channels * 4 electrodes
-
+  
       if trace_type == TraceType.SHORT:
           vals = (colscans[scan_num][well_offset::stride] * 1.0)
       elif trace_type == TraceType.LONG:
@@ -180,12 +167,12 @@ script: |
           vals = (colscans[scan_num][well_offset::stride] * 1.0) / colscans[scan_num][well_offset + 1::stride]
           vals = vals / vals[0]
       return vals
-
-
+  
+  
   def read_evipr(fname, do_print=True):
       colscans = []
       dtype = np.dtype("<H")
-
+  
       if isinstance(fname, tuple):
           import boto3
           from io import BytesIO
@@ -198,7 +185,7 @@ script: |
           fil = io.BytesIO(urlopen(req).read())
       else:
           fil = open(fname, 'rb')
-
+  
       # read header size and skip it
       siz = struct.unpack('i', fil.read(4))[0]
       if do_print:
@@ -207,7 +194,7 @@ script: |
           print("--> Current file pointer: ", fil.tell())
       else:
           fil.seek(siz, 1)
-
+  
       for i in range(0, 6):
           # read protocol header size and skip it
           siz = struct.unpack('i', fil.read(4))[0]
@@ -217,7 +204,7 @@ script: |
               print("--> Current file pointer: ", fil.tell())
           else:
               fil.seek(siz, 1)
-
+  
           # read protocol size
           siz = struct.unpack('i', fil.read(4))[0]
           # here siz is the number of unsigned shorts to read, not the number of bytes
@@ -226,15 +213,15 @@ script: |
               # read protocol N
               num_scans = siz / 8 / 16
               print("--> Protocol %d size %d #timepoints: %f" % (i + 1, siz, num_scans))
-
+  
           bytes = fil.read(siz * 2)  # read siz two-byte shorts
           colscan = np.frombuffer(bytes, dtype=dtype)
           # colscan = np.fromfile(fil, dtype=dtype, count=siz)
           colscans.append(colscan)
-
+  
           if do_print:
               print("--> After reading block, current file pointer: ", fil.tell())
-
+  
           # read post-protocol
           post_bytes = fil.read(4)
           siz = struct.unpack('i', post_bytes)[0]
@@ -245,28 +232,28 @@ script: |
           else:
               fil.seek(siz, 1)
       return colscans
-
-
+  
+  
   def read_traces(fname, do_print=True):
       # Load the plate
       colscans = read_evipr(fname, do_print)
       vals = get_vals(colscans, 0)  # the first well
-
+  
       AllTraces = np.zeros((384, len(vals)))
       # Subtracting 1 is necessary for the Minkowski norm to work
       for nnn in range(0, 384):
           vals = get_vals(colscans, nnn)
           AllTraces[nnn, :] = vals - 1.0
       return AllTraces
-
-
+  
+  
   # This is a no-op for now as we don't have calculateFromAndToIndex
   def getRegion(region):
       rangeMin, rangeMax, method = region
       # rangeMin, rangeMax = calculateFromAndToIndex((rangeMin, rangeMax), isTimeBased(), measurementTimesInSeconds)
       return rangeMin+1, rangeMax+1, method
-
-
+  
+  
   # Not using GeneData StatsUtils safe methods
   def getAggregation(vals, method):
       if method.upper() == 'MAX':
@@ -279,17 +266,18 @@ script: |
           # agg = StatsUtils.mean(vals)
           agg = statistics.mean(vals)
       return agg
-
-
+  
+  
   def calc_raw_region_aggregate_values(traces, well_count, difference_method_type,
-                                       difference_method_calculation, difference_method_num_points):
+                                       difference_method_calculation, difference_method_num_points,
+                                       peak_regions, difference_method):
       region_aggregate_values = [None] * well_count
       for wellNum in range(well_count):
           region_aggregate_values[wellNum] = {}
-          for R in peakRegions:
-              range_min, range_max, method = getRegion(peakRegions[R])
+          for R in peak_regions:
+              range_min, range_max, method = getRegion(peak_regions[R])
               region_aggregate_values[wellNum][R] = getAggregation(traces[wellNum][range_min:range_max], method)
-              if differenceMethod:
+              if difference_method:
                   # also calculate difference value for the region
                   if difference_method_type == 'pre':
                       region_aggregate_values[wellNum][R + "diff"] = getAggregation(
@@ -300,49 +288,69 @@ script: |
                           traces[wellNum][range_max:range_max + difference_method_num_points],
                           difference_method_calculation)
       return region_aggregate_values
-
-
-  def calc_peak_counts(region_aggregate_values, threshold,
-                       difference_method, threshold_computation_region):
+  
+  
+  def calc_peak_counts(region_aggregate_values, peak_regions,
+                       difference_method, threshold_computation_region,
+                       peak_count_normalization_region, scale_reference_well_type_indices,
+                       central_reference_well_type_indices, threshold_val ):
       well_count = len(region_aggregate_values)
       if not difference_method:
           R = threshold_computation_region
-
+  
           threshold_mean = statistics.mean(
-              [region_aggregate_values[wellNum][thresholdComputationRegion] / region_aggregate_values[wellNum][peakCountNormalizationRegion]
-               for wellNum in scaleRefWellTypeIndices])
+              [region_aggregate_values[wellNum][threshold_computation_region] / region_aggregate_values[wellNum][peak_count_normalization_region]
+               for wellNum in scale_reference_well_type_indices])
           dmso_mean = statistics.mean(
-              [region_aggregate_values[wellNum][thresholdComputationRegion] / region_aggregate_values[wellNum][peakCountNormalizationRegion]
-               for wellNum in centralRefWellTypeIndices])
-          cutoff = threshold * (threshold_mean - dmso_mean) / 100.0 + dmso_mean
-
+              [region_aggregate_values[wellNum][threshold_computation_region] / region_aggregate_values[wellNum][peak_count_normalization_region]
+               for wellNum in central_reference_well_type_indices])
+          cutoff = threshold_val * (threshold_mean - dmso_mean) / 100.0 + dmso_mean
+  
           values = [0] * well_count
           for well in range(well_count):
               pc = 0
-              for R in peakRegions:
-                  if R != peakCountNormalizationRegion:
-                      if region_aggregate_values[well][R] / region_aggregate_values[well][peakCountNormalizationRegion] >= cutoff:
+              for R in peak_regions:
+                  if R != peak_count_normalization_region:
+                      if region_aggregate_values[well][R] / region_aggregate_values[well][peak_count_normalization_region] >= cutoff:
                           pc += 1
               values[well] = pc
       else:
           # NOTE: difference method.  This assumes input trace is normalized already
-          threshold_mean = statistics.mean([(region_aggregate_values[wellNum][thresholdComputationRegion] - region_aggregate_values[wellNum][
-              thresholdComputationRegion + "diff"]) + 1.0
-                                           for wellNum in scaleRefWellTypeIndices])
-          dmso_mean = statistics.mean([(region_aggregate_values[wellNum][thresholdComputationRegion] - region_aggregate_values[wellNum][
-              thresholdComputationRegion + "diff"]) + 1.0
-                                      for wellNum in centralRefWellTypeIndices])
-          cutoff = threshold * (threshold_mean - dmso_mean) / 100.0 + dmso_mean
-
+          threshold_mean = statistics.mean([(region_aggregate_values[wellNum][threshold_computation_region] - region_aggregate_values[wellNum][
+              threshold_computation_region + "diff"]) + 1.0
+                                           for wellNum in scale_reference_well_type_indices])
+          dmso_mean = statistics.mean([(region_aggregate_values[wellNum][threshold_computation_region] - region_aggregate_values[wellNum][
+              threshold_computation_region + "diff"]) + 1.0
+                                      for wellNum in central_reference_well_type_indices])
+          cutoff = threshold_val * (threshold_mean - dmso_mean) / 100.0 + dmso_mean
+  
           values = [0] * well_count
           for well in range(well_count):
               pc = 0
-              for R in peakRegions:
-                  if R != peakCountNormalizationRegion:
+              for R in peak_regions:
+                  if R != peak_count_normalization_region:
                       if (region_aggregate_values[well][R] - region_aggregate_values[well][R + "diff"]) + 1.0 >= cutoff:
                           pc += 1
               values[well] = pc
       return values
+  
+  
+  class PlateMapWell:
+      def __init__(self, well_number, well_type):
+          self.well_number = well_number
+          self.well_type = well_type
+  
+  def make_plate_map(scale_reference_well_type, central_reference_well_type):
+      plate_map = []
+      for i in range(0, 384):
+          well_type = "Compound"
+          if i % 24 == 0:
+              well_type = central_reference_well_type
+          #elif i ==4 or (i+28) % 24 == 0:
+          elif (i+1) % 24 == 0:
+              well_type = scale_reference_well_type
+          plate_map.append((i, well_type))
+      return plate_map
 allowedClients:
 - Analyst
 - WebPlayer

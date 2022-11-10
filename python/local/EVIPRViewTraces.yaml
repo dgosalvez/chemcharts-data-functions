@@ -23,6 +23,127 @@ inputFields:
     id: vp3Files
     dataType: string
     selectorType: column
+- control:
+    id: scaleReferenceWellType
+    label: Scale Reference Well Type
+    type: text
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: scaleReferenceWellType
+    dataType: string
+    data: Simulator Control
+- control:
+    id: centralReferenceWellType
+    label: Central Reference Well Type
+    type: text
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: centralReferenceWellType
+    dataType: string
+    data: Neutral Control
+- control:
+    id: peakRegions
+    label: Peak Regions
+    type: textarea
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: peakRegions
+    dataType: string
+    data: "{'R1':(19,79,'AVG'),'R2':(89,109,'MAX'),'R3':(119,129,'MAX'),'R4':(139,149 ,'MAX'),'R5':(159,169,'MAX'),'R6':(179,189,'MAX')}"
+- control:
+    id: peakCountNormalizationRegion
+    label: Normalization Region
+    type: text
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: peakCountNormalizationRegion
+    dataType: string
+    data: R1
+- control:
+    id: thresholdComputationRegion
+    label: Threshold Computation Region
+    type: text
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: thresholdComputationRegion
+    dataType: string
+    data: R2
+- control:
+    id: threshold_val
+    label: Threshold
+    type: text
+    validationRules:
+    - type: required
+      message: ''
+    - type: numeric
+      message: ''
+  request:
+    id: threshold_val
+    dataType: integer
+    data: !!int 50
+- control:
+    id: differenceMethod
+    label: Use Difference Method
+    type: checkbox
+  request:
+    id: differenceMethod
+    dataType: boolean
+    data: !!bool true
+- control:
+    id: differenceMethodType
+    label: Difference Method
+    type: select
+    multi: !!bool false
+    options:
+    - text: Pre
+      value: pre
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: differenceMethodType
+    dataType: string
+    data: pre
+- control:
+    id: differenceMethodCalculation
+    label: Method
+    type: select
+    multi: !!bool false
+    options:
+    - text: AVG
+      value: AVG
+    - text: MEAN
+      value: MEAN
+    - text: Geometric Mean
+      value: GEO
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: differenceMethodCalculation
+    dataType: string
+    data: AVG
+- control:
+    id: differenceMethodNumPoints
+    label: '# Points'
+    type: text
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: differenceMethodNumPoints
+    dataType: integer
+    data: !!int 20
 tags:
 - color: '#dddddd'
   text: Vertex

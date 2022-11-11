@@ -168,87 +168,93 @@ script: |
   
   
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
-      column_id = string_input_field(request, 'vp3Files')
-      evp3_urls = request.inputColumns[column_id]
-  
-      scale_reference_well_type = string_input_field(request, 'scaleReferenceWellType')
-      central_reference_well_type = string_input_field(request, 'centralReferenceWellType')
-      peak_regions = ast.literal_eval(string_input_field(request, 'peakRegions'))
-      threshold_val = integer_input_field(request, 'threshold_val')
-      peak_count_normalization_region = string_input_field(request, 'peakCountNormalizationRegion')
-      threshold_computation_region = string_input_field(request, 'thresholdComputationRegion')
-      difference_method = boolean_input_field(request, 'differenceMethod')
-      difference_method_type = string_input_field(request, 'differenceMethodType')
-      difference_method_calculation = string_input_field(request, 'differenceMethodCalculation')
-      difference_method_num_points = integer_input_field(request, 'differenceMethodNumPoints')
-  
-      well_type_indices = make_plate_map(scale_reference_well_type, central_reference_well_type)
-      scale_ref_well_type_indices = [i for i, wt in well_type_indices if wt == scale_reference_well_type]
-      central_ref_well_type_indices = [i for i, wt in well_type_indices if wt == central_reference_well_type]
-  
-  
-      output_tables = []
-      for url in evp3_urls.values:
-          # read the file into colscans
-          # out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
-          # file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
-          snb_entity_id = url.split("/")[7]
-          colscans = read_evipr(url, False)
-          first_trace = get_vals(colscans, 0)  # the first well
-          trace_size = first_trace.size
-          traces = []
-          well_labels = []
-          frame_ids = []
-          for well in range(0, 384):
-              trace = get_vals(colscans, well, TraceType.NORM_RATIO)
-              traces.append(list(trace))
-              frame_ids.append(list(range(0, trace_size)))
-              row, col = get_row_col(well)
-              well_label = chr(65 + row) + str(col + 1)
-              well_labels.append(well_label)
-  
-          # Need to create a tall-skinny table to trellis the results in Spotfire.
-          # The rows of the tall-skinny need to be ordered by well number
-          # so they distribute values sequentially across the trellis
-          # This can be accomplished by zipping the 384 traces
-          norm_ratios = zip(*traces)
-          frames = zip(*frame_ids)
-          # Chain the traces into a single list
-          norm_ratio_col = list(itertools.chain.from_iterable(norm_ratios))
-          frames_col = list(itertools.chain.from_iterable(frames))
-          # Generate an order list of well numbers and well labels
-          well_labels_col = well_labels * trace_size
-          # prepare results as Spotfire Table
-          frame_id_column = ColumnData(name=f'Frame ID', dataType=DataType.INTEGER, values=frames_col)
-          ratio_column = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
-          well_label_column = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
-  
-          traces_datatable = TableData(tableName=f'{snb_entity_id}',
-                                       columns=[frame_id_column, ratio_column, well_label_column])
-          output_tables.append(traces_datatable)
-          print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
-          # Peak Counting
-          region_aggregate_values = calc_raw_region_aggregate_values(traces, 384,
-                                                                     difference_method_type,
-                                                                     difference_method_calculation,
-                                                                     difference_method_num_points,
-                                                                     peak_regions, difference_method)
-          peak_counts = calc_peak_counts(region_aggregate_values, peak_regions,
-                                         difference_method, threshold_computation_region,
-                                         peak_count_normalization_region, scale_ref_well_type_indices,
-                                         central_ref_well_type_indices, threshold_val)
-  
-          peak_counts_column = ColumnData(name=f'Raw Counts', dataType=DataType.INTEGER, values=peak_counts)
-          well_label_col = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels)
-          well_num_col = ColumnData(name=f'Well Number', dataType=DataType.INTEGER, values=list(range(0,384)))
-          peak_counts_datatable = TableData(tableName=f'Counts {snb_entity_id}',
-                                            columns=[well_num_col, well_label_col, peak_counts_column])
-          output_tables.append(peak_counts_datatable)
-          print(f"Generated EVIPR Peak Counts Spotfire Datatable for {url}")
-  
-      response = DataFunctionResponse(outputTables=output_tables)
-      print("Done")
-      return response
+    column_id = string_input_field(request, 'vp3Files')
+    evp3_urls = request.inputColumns[column_id]
+
+    scale_reference_well_type = string_input_field(request, 'scaleReferenceWellType')
+    central_reference_well_type = string_input_field(request, 'centralReferenceWellType')
+    peak_regions = ast.literal_eval(string_input_field(request, 'peakRegions'))
+    threshold_val = integer_input_field(request, 'threshold_val')
+    peak_count_normalization_region = string_input_field(request, 'peakCountNormalizationRegion')
+    threshold_computation_region = string_input_field(request, 'thresholdComputationRegion')
+    difference_method = boolean_input_field(request, 'differenceMethod')
+    difference_method_type = string_input_field(request, 'differenceMethodType')
+    difference_method_calculation = string_input_field(request, 'differenceMethodCalculation')
+    difference_method_num_points = integer_input_field(request, 'differenceMethodNumPoints')
+
+    well_type_indices = make_plate_map(scale_reference_well_type, central_reference_well_type)
+    scale_ref_well_type_indices = [i for i, wt in well_type_indices if wt == scale_reference_well_type]
+    central_ref_well_type_indices = [i for i, wt in well_type_indices if wt == central_reference_well_type]
+
+
+    output_tables = []
+    for url in evp3_urls.values:
+        # read the file into colscans
+        # out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+        # file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
+        snb_entity_id = url.split("/")[7]
+        colscans = read_evipr(url, False)
+        first_trace = get_vals(colscans, 0)  # the first well
+        trace_size = first_trace.size
+        traces = []
+        well_labels = []
+        rows = []
+        cols = []
+        frame_ids = []
+        for well in range(0, 384):
+            trace = get_vals(colscans, well, TraceType.NORM_RATIO)
+            traces.append(list(trace))
+            frame_ids.append(list(range(0, trace_size)))
+            row, col = get_row_col(well)
+            well_label = chr(65 + row) + str(col + 1)
+            well_labels.append(well_label)
+            rows.append(row)
+            cols.append(col)
+
+        # Need to create a tall-skinny table to trellis the results in Spotfire.
+        # The rows of the tall-skinny need to be ordered by well number
+        # so they distribute values sequentially across the trellis
+        # This can be accomplished by zipping the 384 traces
+        norm_ratios = zip(*traces)
+        frames = zip(*frame_ids)
+        # Chain the traces into a single list
+        norm_ratio_col = list(itertools.chain.from_iterable(norm_ratios))
+        frames_col = list(itertools.chain.from_iterable(frames))
+        # Generate an order list of well numbers and well labels
+        well_labels_col = well_labels * trace_size
+        # prepare results as Spotfire Table
+        frame_id_column = ColumnData(name=f'Frame ID', dataType=DataType.INTEGER, values=frames_col)
+        ratio_column = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
+        well_label_column = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
+
+        traces_datatable = TableData(tableName=f'{snb_entity_id}',
+                                     columns=[frame_id_column, ratio_column, well_label_column])
+        output_tables.append(traces_datatable)
+        print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
+        # Peak Counting
+        region_aggregate_values = calc_raw_region_aggregate_values(traces, 384,
+                                                                   difference_method_type,
+                                                                   difference_method_calculation,
+                                                                   difference_method_num_points,
+                                                                   peak_regions, difference_method)
+        peak_counts = calc_peak_counts(region_aggregate_values, peak_regions,
+                                       difference_method, threshold_computation_region,
+                                       peak_count_normalization_region, scale_ref_well_type_indices,
+                                       central_ref_well_type_indices, threshold_val)
+
+        peak_counts_column = ColumnData(name=f'Raw Counts', dataType=DataType.INTEGER, values=peak_counts)
+        well_label_col = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels)
+        row = ColumnData(name=f'Row', dataType=DataType.INTEGER, values=rows)
+        col = ColumnData(name=f'Row', dataType=DataType.INTEGER, values=cols)
+
+        peak_counts_datatable = TableData(tableName=f'Counts {snb_entity_id}',
+                                          columns=[row, col, well_label_col, peak_counts_column])
+        output_tables.append(peak_counts_datatable)
+        print(f"Generated EVIPR Peak Counts Spotfire Datatable for {url}")
+
+    response = DataFunctionResponse(outputTables=output_tables)
+    print("Done")
+    return response
   
   
   class TraceType(Enum):

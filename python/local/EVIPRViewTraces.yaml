@@ -161,6 +161,7 @@ maximumOutputColumns: !!int 10
 maximumOutputTables: !!int 5
 chemistryFunction: !!bool false
 script: |
+  import ast
   import io
   import itertools
   import statistics
@@ -254,7 +255,7 @@ script: |
           peak_counts_column = ColumnData(name=f'Raw Counts', dataType=DataType.INTEGER, values=peak_counts)
           well_label_col = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels)
           row = ColumnData(name=f'Row', dataType=DataType.INTEGER, values=rows)
-          col = ColumnData(name=f'Row', dataType=DataType.INTEGER, values=cols)
+          col = ColumnData(name=f'Col', dataType=DataType.INTEGER, values=cols)
 
           peak_counts_datatable = TableData(tableName=f'Counts {fileName}',
                                             columns=[row, col, well_label_col, peak_counts_column])
@@ -626,7 +627,7 @@ ironPython: |
           sp.XAxis.Expression = '[Row]'
 
           # build YAxis expression
-          sp.YAxis.Expression = '[Row (2)]'
+          sp.YAxis.Expression = '[Col]'
 
           sp.MarkerClass = MarkerClass().Tile
           sp.ColorAxis.Expression = "<[Raw Counts]>"

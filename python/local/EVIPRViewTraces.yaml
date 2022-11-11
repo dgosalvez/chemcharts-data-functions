@@ -9,10 +9,10 @@ executorId: Glysade.CPythonDataFxn
 inputFields:
 - control:
     id: vp3Files
-    label: Select column with files to process
+    label: Select column with file paths to process
     type: columnselect
     multi: !!bool false
-    tooltip: Column should hold a list of .evpr files
+    tooltip: Column should hold a list of .evpr file paths
     validationRules:
     - type: required
       message: ''
@@ -21,6 +21,18 @@ inputFields:
       contentType: []
   request:
     id: vp3Files
+    dataType: string
+    selectorType: column
+- control:
+    id: vp3FileNames
+    label: Select column with file names to process
+    type: columnselect
+    multi: !!bool false
+    validationRules:
+    - type: required
+      message: ''
+  request:
+    id: vp3FileNames
     dataType: string
     selectorType: column
 - control:
@@ -33,7 +45,7 @@ inputFields:
   request:
     id: scaleReferenceWellType
     dataType: string
-    data: Simulator Control
+    data: Stimulator Control
 - control:
     id: centralReferenceWellType
     label: Central Reference Well Type
@@ -147,6 +159,106 @@ inputFields:
 tags:
 - color: '#dddddd'
   text: Vertex
+ironPython: |
+  import clr
+  from Spotfire.Dxp.Application import PanelTypeIdentifiers
+  from Spotfire.Dxp.Application.Visuals import ScatterPlot, LineChart, TrellisMode, IndividualScalingMode, AxisRange, MarkerClass
+  from System.Drawing import *  # Color
+  from System import *  # ColorTranslator
+  from System import *  #Collections
+  from System import AppDomain
+
+  for asm in AppDomain.CurrentDomain.GetAssemblies():
+      if asm.GetName().Name == 'Charts':
+          clr.AddReference(asm.FullName)
+
+  from Charts import ChartsModel
+
+  model_type = ChartsModel
+
+  # tableId pass in args
+  dataTable = ResultTables[0]
+  #dataTable = Document.Data.Tables.Item['uploadedResource:3273c042-fb85-4a67-800c-bbb0f3734d88']
+
+  if not dataTable:
+      raise Exception('target table not found')
+
+  page = Document.Pages.AddNew('EVIPR Trace')
+  panelsToHide = [PanelTypeIdentifiers.DataPanel, PanelTypeIdentifiers.DetailsOnDemandPanel]
+
+  for panel in page.Panels:
+      if panel.TypeId in panelsToHide:
+          if panel.Visible:
+              panel.Visible = False
+
+  filteringScheme = Document.FilteringSchemes[0]
+  page.FilterPanel.FilteringSchemeReference = filteringScheme
+
+  # add and configure LineChart
+  lineChart = page.Visuals.AddNew[LineChart]()
+  lineChart.Title = "EVIPR Normal Ratio"
+  lineChart.Data.DataTableReference = dataTable
+  lineChart.XAxis.Expression = '<' + 'baserowid()' + '>'
+  lineChart.XAxis.ManualZoom = True
+  lineChart.XAxis.Scale.ShowGridlines = False
+  lineChart.XAxis.Scale.ShowLabels = False
+  lineChart.XAxis.ShowAxisSelector = False
+
+  # build YAxis expression
+  lineChart.YAxis.Expression = '[Normal Ratio]'
+  lineChart.Trellis.TrellisMode = TrellisMode.Panels
+  lineChart.Trellis.PanelAxis.Expression = '<[Well Label]>'
+  lineChart.Trellis.ManualLayout = True
+  lineChart.Trellis.ManualColumnCount = 24
+  lineChart.Trellis.ManualRowCount = 16
+  lineChart.YAxis.IndividualScaling = False
+  lineChart.YAxis.IndividualScalingMode = IndividualScalingMode.Trellis
+  # lineChart.YAxis.Range = AxisRange(0.85, 1.4)
+  lineChart.YAxis.ShowAxisSelector = False
+  color = ColorTranslator.FromHtml("#0eff00")
+  lineChart.ColorAxis.Coloring.DefaultColor = color
+
+  well_order = Collections.Generic.List[str](["A1","A2","A3","A4","A5","A6","A7","A8","A9","A10","A11","A12","A13","A14","A15","A16","A17","A18","A19","A20","A21","A22","A23","A24","B1","B2","B3","B4","B5","B6","B7","B8","B9","B10","B11","B12","B13","B14","B15","B16","B17","B18","B19","B20","B21","B22","B23","B24","C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","C11","C12","C13","C14","C15","C16","C17","C18","C19","C20","C21","C22","C23","C24","D1","D2","D3","D4","D5","D6","D7","D8","D9","D10","D11","D12","D13","D14","D15","D16","D17","D18","D19","D20","D21","D22","D23","D24","E1","E2","E3","E4","E5","E6","E7","E8","E9","E10","E11","E12","E13","E14","E15","E16","E17","E18","E19","E20","E21","E22","E23","E24","F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12","F13","F14","F15","F16","F17","F18","F19","F20","F21","F22","F23","F24","G1","G2","G3","G4","G5","G6","G7","G8","G9","G10","G11","G12","G13","G14","G15","G16","G17","G18","G19","G20","G21","G22","G23","G24","H1","H2","H3","H4","H5","H6","H7","H8","H9","H10","H11","H12","H13","H14","H15","H16","H17","H18","H19","H20","H21","H22","H23","H24","I1","I2","I3","I4","I5","I6","I7","I8","I9","I10","I11","I12","I13","I14","I15","I16","I17","I18","I19","I20","I21","I22","I23","I24","J1","J2","J3","J4","J5","J6","J7","J8","J9","J10","J11","J12","J13","J14","J15","J16","J17","J18","J19","J20","J21","J22","J23","J24","K1","K2","K3","K4","K5","K6","K7","K8","K9","K10","K11","K12","K13","K14","K15","K16","K17","K18","K19","K20","K21","K22","K23","K24","L1","L2","L3","L4","L5","L6","L7","L8","L9","L10","L11","L12","L13","L14","L15","L16","L17","L18","L19","L20","L21","L22","L23","L24","M1","M2","M3","M4","M5","M6","M7","M8","M9","M10","M11","M12","M13","M14","M15","M16","M17","M18","M19","M20","M21","M22","M23","M24","N1","N2","N3","N4","N5","N6","N7","N8","N9","N10","N11","N12","N13","N14","N15","N16","N17","N18","N19","N20","N21","N22","N23","N24","O1","O2","O3","O4","O5","O6","O7","O8","O9","O10","O11","O12","O13","O14","O15","O16","O17","O18","O19","O20","O21","O22","O23","O24","P1","P2","P3","P4","P5","P6","P7","P8","P9","P10","P11","P12","P13","P14","P15","P16","P17","P18","P19","P20","P21","P22","P23","P24"])
+  dataTable.Columns["Well Label"].Properties.SetCustomSortOrder(well_order)
+  for i in lineChart.Legend.Items:
+      if i.Title == "Data table":
+          i.Visible = True
+          i.ShowTitle = True
+      else:
+          i.Visible = False  # Hide any legend items not caught above
+
+  page.AutoConfigure()
+
+  # tableId pass in args
+  dataTable2 = ResultTables[1]
+  #dataTable2 = Document.Data.Tables.Item['Script Output Table (2)']
+
+  if not dataTable2:
+      raise Exception('target table not found')
+
+  page2 = Document.Pages.AddNew('EVIPR Peak Counts')
+  panelsToHide = [PanelTypeIdentifiers.DataPanel, PanelTypeIdentifiers.DetailsOnDemandPanel]
+
+  for panel in page2.Panels:
+      if panel.TypeId in panelsToHide:
+          if panel.Visible:
+              panel.Visible = False
+
+  filteringScheme = Document.FilteringSchemes[0]
+  page2.FilterPanel.FilteringSchemeReference = filteringScheme
+
+  # add and configure LineChart
+  sp = page2.Visuals.AddNew[ScatterPlot]()
+  sp.Title = "EVIPR Peak Count"
+  sp.Data.DataTableReference = dataTable2
+  sp.XAxis.Expression = '[Row]'
+
+  # build YAxis expression
+  sp.YAxis.Expression = '[Row (2)]'
+
+  sp.MarkerClass = MarkerClass().Tile
+  sp.ColorAxis.Expression = "<[Raw Counts]>"
+  page2.AutoConfigure()
 updateBehavior: manual
 maximumOutputColumns: !!int 10
 maximumOutputTables: !!int 5
@@ -159,18 +271,20 @@ script: |
   import struct
   from enum import Enum
   from urllib.request import Request, urlopen
-  
+
   import numpy as np
   from df.data_transfer import DataFunctionRequest, DataFunctionResponse, DataType, ColumnData, \
       string_input_field, integer_input_field, boolean_input_field, TableData
-  
+
   snb_api_key = "OBtnuLFItrL7g87qcrRquzwlwEaMOUoWloJokHFUz+KYEm1+ryi28ywDssCJByfPGrVf5w=="
-  
-  
+
+
   def execute(request: DataFunctionRequest) -> DataFunctionResponse:
     column_id = string_input_field(request, 'vp3Files')
     evp3_urls = request.inputColumns[column_id]
-
+    column_id = string_input_field(request, 'vp3FileNames')
+    evp3_names = request.inputColumns[column_id]
+    evp3_files = {evp3_names.values[i]: evp3_urls.values[i] for i in range(len(evp3_names.values))}
     scale_reference_well_type = string_input_field(request, 'scaleReferenceWellType')
     central_reference_well_type = string_input_field(request, 'centralReferenceWellType')
     peak_regions = ast.literal_eval(string_input_field(request, 'peakRegions'))
@@ -186,9 +300,8 @@ script: |
     scale_ref_well_type_indices = [i for i, wt in well_type_indices if wt == scale_reference_well_type]
     central_ref_well_type_indices = [i for i, wt in well_type_indices if wt == central_reference_well_type]
 
-
     output_tables = []
-    for url in evp3_urls.values:
+    for fileName, url in evp3_files.items():
         # read the file into colscans
         # out_file_name = "1p8_1p7 MC WC1 KB_BC_VV368247_2022-09-26_1017AM.vpr3"
         # file_name = "https://sld-share.s3.amazonaws.com/1p8_1p7+MC+WC1+KB_BC_VV368247_2022-09-26_1017AM.vpr3"
@@ -227,10 +340,10 @@ script: |
         ratio_column = ColumnData(name=f'Normal Ratio', dataType=DataType.FLOAT, values=norm_ratio_col)
         well_label_column = ColumnData(name=f'Well Label', dataType=DataType.STRING, values=well_labels_col)
 
-        traces_datatable = TableData(tableName=f'{snb_entity_id}',
+        traces_datatable = TableData(tableName=f'{fileName}',
                                      columns=[frame_id_column, ratio_column, well_label_column])
         output_tables.append(traces_datatable)
-        print(f"Generated EVIPR Traces Spotfire Datatable for {url}")
+        print(f"Generated EVIPR Traces Spotfire Datatable for {fileName}")
         # Peak Counting
         region_aggregate_values = calc_raw_region_aggregate_values(traces, 384,
                                                                    difference_method_type,
@@ -247,39 +360,39 @@ script: |
         row = ColumnData(name=f'Row', dataType=DataType.INTEGER, values=rows)
         col = ColumnData(name=f'Row', dataType=DataType.INTEGER, values=cols)
 
-        peak_counts_datatable = TableData(tableName=f'Counts {snb_entity_id}',
+        peak_counts_datatable = TableData(tableName=f'Counts {fileName}',
                                           columns=[row, col, well_label_col, peak_counts_column])
         output_tables.append(peak_counts_datatable)
-        print(f"Generated EVIPR Peak Counts Spotfire Datatable for {url}")
+        print(f"Generated EVIPR Peak Counts Spotfire Datatable for {fileName}")
 
     response = DataFunctionResponse(outputTables=output_tables)
     print("Done")
     return response
-  
-  
+
+
   class TraceType(Enum):
       SHORT = 1
       LONG = 2
       RATIO = 3
       NORM_RATIO = 4
       STUPID_NORM_RATIO = 5
-  
-  
+
+
   def get_row_col(well_num):
       col = well_num % 24
       row = well_num // 24
       return row, col
-  
-  
+
+
   def get_vals(colscans, well_num, trace_type=TraceType.NORM_RATIO, norm_fraction=0.05):
       row, col = get_row_col(well_num)
       scan_num = col % 6  # which data block to read from
       block_num = col // 6
-  
+
       # print row, col, scan_num, block_num
       well_offset = row * 2 + (block_num * 32)
       stride = 16 * 2 * 4  # 16 columns * 2 channels * 4 electrodes
-  
+
       if trace_type == TraceType.SHORT:
           vals = (colscans[scan_num][well_offset::stride] * 1.0)
       elif trace_type == TraceType.LONG:
@@ -294,12 +407,12 @@ script: |
           vals = (colscans[scan_num][well_offset::stride] * 1.0) / colscans[scan_num][well_offset + 1::stride]
           vals = vals / vals[0]
       return vals
-  
-  
+
+
   def read_evipr(fname, do_print=True):
       colscans = []
       dtype = np.dtype("<H")
-  
+
       if isinstance(fname, tuple):
           import boto3
           from io import BytesIO
@@ -312,7 +425,7 @@ script: |
           fil = io.BytesIO(urlopen(req).read())
       else:
           fil = open(fname, 'rb')
-  
+
       # read header size and skip it
       siz = struct.unpack('i', fil.read(4))[0]
       if do_print:
@@ -321,7 +434,7 @@ script: |
           print("--> Current file pointer: ", fil.tell())
       else:
           fil.seek(siz, 1)
-  
+
       for i in range(0, 6):
           # read protocol header size and skip it
           siz = struct.unpack('i', fil.read(4))[0]
@@ -331,7 +444,7 @@ script: |
               print("--> Current file pointer: ", fil.tell())
           else:
               fil.seek(siz, 1)
-  
+
           # read protocol size
           siz = struct.unpack('i', fil.read(4))[0]
           # here siz is the number of unsigned shorts to read, not the number of bytes
@@ -340,15 +453,15 @@ script: |
               # read protocol N
               num_scans = siz / 8 / 16
               print("--> Protocol %d size %d #timepoints: %f" % (i + 1, siz, num_scans))
-  
+
           bytes = fil.read(siz * 2)  # read siz two-byte shorts
           colscan = np.frombuffer(bytes, dtype=dtype)
           # colscan = np.fromfile(fil, dtype=dtype, count=siz)
           colscans.append(colscan)
-  
+
           if do_print:
               print("--> After reading block, current file pointer: ", fil.tell())
-  
+
           # read post-protocol
           post_bytes = fil.read(4)
           siz = struct.unpack('i', post_bytes)[0]
@@ -359,28 +472,28 @@ script: |
           else:
               fil.seek(siz, 1)
       return colscans
-  
-  
+
+
   def read_traces(fname, do_print=True):
       # Load the plate
       colscans = read_evipr(fname, do_print)
       vals = get_vals(colscans, 0)  # the first well
-  
+
       AllTraces = np.zeros((384, len(vals)))
       # Subtracting 1 is necessary for the Minkowski norm to work
       for nnn in range(0, 384):
           vals = get_vals(colscans, nnn)
           AllTraces[nnn, :] = vals - 1.0
       return AllTraces
-  
-  
+
+
   # This is a no-op for now as we don't have calculateFromAndToIndex
   def getRegion(region):
       rangeMin, rangeMax, method = region
       # rangeMin, rangeMax = calculateFromAndToIndex((rangeMin, rangeMax), isTimeBased(), measurementTimesInSeconds)
       return rangeMin+1, rangeMax+1, method
-  
-  
+
+
   # Not using GeneData StatsUtils safe methods
   def getAggregation(vals, method):
       if method.upper() == 'MAX':
@@ -393,8 +506,8 @@ script: |
           # agg = StatsUtils.mean(vals)
           agg = statistics.mean(vals)
       return agg
-  
-  
+
+
   def calc_raw_region_aggregate_values(traces, well_count, difference_method_type,
                                        difference_method_calculation, difference_method_num_points,
                                        peak_regions, difference_method):
@@ -415,8 +528,8 @@ script: |
                           traces[wellNum][range_max:range_max + difference_method_num_points],
                           difference_method_calculation)
       return region_aggregate_values
-  
-  
+
+
   def calc_peak_counts(region_aggregate_values, peak_regions,
                        difference_method, threshold_computation_region,
                        peak_count_normalization_region, scale_reference_well_type_indices,
@@ -424,7 +537,7 @@ script: |
       well_count = len(region_aggregate_values)
       if not difference_method:
           R = threshold_computation_region
-  
+
           threshold_mean = statistics.mean(
               [region_aggregate_values[wellNum][threshold_computation_region] / region_aggregate_values[wellNum][peak_count_normalization_region]
                for wellNum in scale_reference_well_type_indices])
@@ -432,7 +545,7 @@ script: |
               [region_aggregate_values[wellNum][threshold_computation_region] / region_aggregate_values[wellNum][peak_count_normalization_region]
                for wellNum in central_reference_well_type_indices])
           cutoff = threshold_val * (threshold_mean - dmso_mean) / 100.0 + dmso_mean
-  
+
           values = [0] * well_count
           for well in range(well_count):
               pc = 0
@@ -450,7 +563,7 @@ script: |
               threshold_computation_region + "diff"]) + 1.0
                                       for wellNum in central_reference_well_type_indices])
           cutoff = threshold_val * (threshold_mean - dmso_mean) / 100.0 + dmso_mean
-  
+
           values = [0] * well_count
           for well in range(well_count):
               pc = 0
@@ -460,13 +573,13 @@ script: |
                           pc += 1
               values[well] = pc
       return values
-  
-  
+
+
   class PlateMapWell:
       def __init__(self, well_number, well_type):
           self.well_number = well_number
           self.well_type = well_type
-  
+
   def make_plate_map(scale_reference_well_type, central_reference_well_type):
       plate_map = []
       for i in range(0, 384):
@@ -481,75 +594,5 @@ script: |
 allowedClients:
 - Analyst
 - WebPlayer
-demoUrl:
+demoUrl: 
 limitBy: none
-ironPython: |
-  import clr
-  from Spotfire.Dxp.Application import PanelTypeIdentifiers
-  from Spotfire.Dxp.Application.Visuals import LineChart, TrellisMode, IndividualScalingMode, AxisRange
-  from System.Drawing import *  # Color
-  from System import *  # ColorTranslator
-  from System import *  #Collections
-  from System import AppDomain
-  
-  for asm in AppDomain.CurrentDomain.GetAssemblies():
-      if asm.GetName().Name == 'Charts':
-          clr.AddReference(asm.FullName)
-  
-  from Charts import ChartsModel
-  
-  model_type = ChartsModel
-  
-  # tableId pass in args
-  dataTable = ResultTables[0]
-  #dataTable = Document.Data.Tables.Item['uploadedResource:3273c042-fb85-4a67-800c-bbb0f3734d88']
-  
-  if not dataTable:
-      raise Exception('target table not found')
-  
-  page = Document.Pages.AddNew('EVIPR Trace')
-  panelsToHide = [PanelTypeIdentifiers.DataPanel, PanelTypeIdentifiers.DetailsOnDemandPanel]
-  
-  for panel in page.Panels:
-      if panel.TypeId in panelsToHide:
-          if panel.Visible:
-              panel.Visible = False
-  
-  filteringScheme = Document.FilteringSchemes[0]
-  page.FilterPanel.FilteringSchemeReference = filteringScheme
-  
-  # add and configure LineChart
-  lineChart = page.Visuals.AddNew[LineChart]()
-  lineChart.Title = "EVIPR Normal Ratio"
-  lineChart.Data.DataTableReference = dataTable
-  lineChart.XAxis.Expression = '<' + 'baserowid()' + '>'
-  lineChart.XAxis.ManualZoom = True
-  lineChart.XAxis.Scale.ShowGridlines = False
-  lineChart.XAxis.Scale.ShowLabels = False
-  lineChart.XAxis.ShowAxisSelector = False
-  
-  # build YAxis expression
-  lineChart.YAxis.Expression = '[Normal Ratio]'
-  lineChart.Trellis.TrellisMode = TrellisMode.Panels
-  lineChart.Trellis.PanelAxis.Expression = '<[Well Label]>'
-  lineChart.Trellis.ManualLayout = True
-  lineChart.Trellis.ManualColumnCount = 24
-  lineChart.Trellis.ManualRowCount = 16
-  lineChart.YAxis.IndividualScaling = False
-  lineChart.YAxis.IndividualScalingMode = IndividualScalingMode.Trellis
-  # lineChart.YAxis.Range = AxisRange(0.85, 1.4)
-  lineChart.YAxis.ShowAxisSelector = False
-  color = ColorTranslator.FromHtml("#0eff00")
-  lineChart.ColorAxis.Coloring.DefaultColor = color
-  
-  well_order = Collections.Generic.List[str](["A1","A2","A3","A4","A5","A6","A7","A8","A9","A10","A11","A12","A13","A14","A15","A16","A17","A18","A19","A20","A21","A22","A23","A24","B1","B2","B3","B4","B5","B6","B7","B8","B9","B10","B11","B12","B13","B14","B15","B16","B17","B18","B19","B20","B21","B22","B23","B24","C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","C11","C12","C13","C14","C15","C16","C17","C18","C19","C20","C21","C22","C23","C24","D1","D2","D3","D4","D5","D6","D7","D8","D9","D10","D11","D12","D13","D14","D15","D16","D17","D18","D19","D20","D21","D22","D23","D24","E1","E2","E3","E4","E5","E6","E7","E8","E9","E10","E11","E12","E13","E14","E15","E16","E17","E18","E19","E20","E21","E22","E23","E24","F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12","F13","F14","F15","F16","F17","F18","F19","F20","F21","F22","F23","F24","G1","G2","G3","G4","G5","G6","G7","G8","G9","G10","G11","G12","G13","G14","G15","G16","G17","G18","G19","G20","G21","G22","G23","G24","H1","H2","H3","H4","H5","H6","H7","H8","H9","H10","H11","H12","H13","H14","H15","H16","H17","H18","H19","H20","H21","H22","H23","H24","I1","I2","I3","I4","I5","I6","I7","I8","I9","I10","I11","I12","I13","I14","I15","I16","I17","I18","I19","I20","I21","I22","I23","I24","J1","J2","J3","J4","J5","J6","J7","J8","J9","J10","J11","J12","J13","J14","J15","J16","J17","J18","J19","J20","J21","J22","J23","J24","K1","K2","K3","K4","K5","K6","K7","K8","K9","K10","K11","K12","K13","K14","K15","K16","K17","K18","K19","K20","K21","K22","K23","K24","L1","L2","L3","L4","L5","L6","L7","L8","L9","L10","L11","L12","L13","L14","L15","L16","L17","L18","L19","L20","L21","L22","L23","L24","M1","M2","M3","M4","M5","M6","M7","M8","M9","M10","M11","M12","M13","M14","M15","M16","M17","M18","M19","M20","M21","M22","M23","M24","N1","N2","N3","N4","N5","N6","N7","N8","N9","N10","N11","N12","N13","N14","N15","N16","N17","N18","N19","N20","N21","N22","N23","N24","O1","O2","O3","O4","O5","O6","O7","O8","O9","O10","O11","O12","O13","O14","O15","O16","O17","O18","O19","O20","O21","O22","O23","O24","P1","P2","P3","P4","P5","P6","P7","P8","P9","P10","P11","P12","P13","P14","P15","P16","P17","P18","P19","P20","P21","P22","P23","P24"])
-  dataTable.Columns["Well Label"].Properties.SetCustomSortOrder(well_order)
-  for i in lineChart.Legend.Items:
-      if i.Title == "Data table":
-          i.Visible = True
-          i.ShowTitle = True
-      else:
-          i.Visible = False  # Hide any legend items not caught above
-  
-  page.AutoConfigure()
-
